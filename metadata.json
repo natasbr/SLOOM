@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Favela Doom Co-op",
+  "description": "A multiplayer DOOM-style dungeon co-op game set in a favela with PeerJS networking, procedural levels, blood particles, voxel loot bag, and AI samba chiptune audio.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
