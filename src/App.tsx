@@ -26,8 +26,21 @@ interface GameState {
 interface NetworkMessage { type: string; payload: any; }
 
 // --- Constants & Config ---
-const MAP_SIZE = 16;
-const WALL_COLORS = ["#1f2937", "#4b5563", "#374151", "#111827"]; // Favela brick & concrete
+const MAP = [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1],
+    [1,0,2,2,0,0,1,0,2,2,2,2,0,2,0,1],
+    [1,0,2,0,0,0,0,0,0,0,0,2,0,2,0,1],
+    [1,0,2,0,1,1,1,1,0,1,0,2,0,2,0,1],
+    [1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,1],
+    [1,1,1,1,1,0,0,1,0,1,1,1,1,2,0,1],
+    [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,2,0,1,1,1,1,1,1,1,1,1,2,2,1],
+    [1,0,2,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,2,2,2,2,0,2,2,2,2,2,2,2,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+];
 
 // Web Audio API Samba Doom Sound Engine
 const playSambaDoomAudio = () => {
@@ -37,8 +50,8 @@ const playSambaDoomAudio = () => {
         const ctx = new AudioContext();
         
         let beat = 0;
-        const tempo = 135; // Fast samba bpm
-        const stepTime = 60 / (tempo * 4); // 16th notes
+        const tempo = 135;
+        const stepTime = 60 / (tempo * 4);
 
         const playKick = (time: number) => {
             const osc = ctx.createOscillator();
@@ -93,28 +106,23 @@ const playSambaDoomAudio = () => {
         };
 
         const schedule = () => {
-            if (ctx.state === 'suspended') {
-                ctx.resume();
-            }
+            if (ctx.state === 'suspended') ctx.resume();
             const now = ctx.currentTime;
             for (let i = 0; i < 16; i++) {
                 const t = now + (i * stepTime);
-                // Samba syncopation + Doom driving rhythm
                 if (i % 8 === 0 || i % 8 === 6 || i % 8 === 10) playKick(t);
                 if (i % 8 === 4 || i % 8 === 12) playSurdo(t);
-                
                 if (i % 2 === 0) {
-                    const notes = [55, 55, 65.41, 73.42, 55, 82.41, 73.42, 65.41]; // Heavy bass riff
+                    const notes = [55, 55, 65.41, 73.42, 55, 82.41, 73.42, 65.41];
                     playDistortedBass(t, notes[(i/2) % notes.length]);
                 }
             }
             beat += 16;
             setTimeout(schedule, (stepTime * 16 * 1000) - 100);
         };
-        
         schedule();
     } catch (e) {
-        console.log("Audio not allowed yet until interaction", e);
+        console.log("Audio waiting for user interaction", e);
     }
 };
 
@@ -126,38 +134,30 @@ let conn2: DataConnection | null = null;
 let gameActionDispatcher: ((action: NetworkMessage, playerId?: PlayerId) => void) | null = null;
 
 const networkManager = {
-    generateRandomId: () => {
-        return Math.floor(1000 + Math.random() * 9000).toString();
-    },
+    generateRandomId: () => Math.floor(1000 + Math.random() * 9000).toString(),
 
     createHost: (onCode: (code: string) => void, onConnect: (p: PlayerId) => void) => {
         try {
             const id = networkManager.generateRandomId();
             peer = new Peer(id);
 
-            peer.on('open', (id) => {
-                console.log('Host created with ID:', id);
-                onCode(id);
-            });
-
+            peer.on('open', (id) => onCode(id));
             peer.on('connection', (connection) => {
-                console.log('Incoming connection from:', connection.peer);
                 if (!conn1) {
                     conn1 = connection;
                     networkManager.setupConnection(conn1, 'p1', onConnect);
+                    conn1.send({ type: 'assign_player', payload: { playerId: 'p1' } });
                 } else if (!conn2) {
                     conn2 = connection;
                     networkManager.setupConnection(conn2, 'p2', onConnect);
+                    conn2.send({ type: 'assign_player', payload: { playerId: 'p2' } });
                 } else {
-                    console.warn('Lobby full, rejecting connection');
                     connection.close();
                 }
             });
-
-            peer.on('error', (err) => console.error('Host Peer error:', err));
-            peer.on('disconnected', () => console.log('Host disconnected'));
-        } catch (error) {
-            console.error("Failed to initialize Host Peer:", error);
+            peer.on('error', (err) => console.error('Host error:', err));
+        } catch (e) {
+            console.error("Host init error:", e);
             onCode("ERR!");
         }
     },
@@ -166,16 +166,9 @@ const networkManager = {
         try {
             const myId = 'cast_' + networkManager.generateRandomId();
             peer = new Peer(myId);
-
-            peer.on('open', () => {
-                networkManager.connectToHost(hostId, onConnected, onError);
-            });
-            peer.on('error', (err) => {
-                console.error('Client Peer error:', err);
-                onError();
-            });
-        } catch (error) {
-            console.error("Failed to initialize Client Peer:", error);
+            peer.on('open', () => networkManager.connectToHost(hostId, onConnected, onError));
+            peer.on('error', () => onError());
+        } catch (e) {
             onError();
         }
     },
@@ -183,13 +176,8 @@ const networkManager = {
     connectToHost: (hostId: string, onConnected: () => void, onError: () => void) => {
         if (!peer) return;
         conn1 = peer.connect(hostId);
-
-        conn1.on('open', () => {
-            networkManager.setupConnection(conn1!, 'p1', onConnected);
-        });
-        
+        conn1.on('open', () => networkManager.setupConnection(conn1!, 'p1', onConnected));
         conn1.on('error', onError);
-        conn1.on('close', () => console.log('Connection to host closed'));
     },
 
     setupConnection: (connection: DataConnection, assignedId: PlayerId, onReady: (id: PlayerId) => void) => {
@@ -197,24 +185,17 @@ const networkManager = {
             networkManager.handleNetworkMessage(data, assignedId);
         });
         connection.on('close', () => {
-            console.log(`Connection closed for ${assignedId}`);
             if (gameActionDispatcher) gameActionDispatcher({ type: 'player_disconnect', payload: {} }, assignedId);
         });
-        connection.on('error', (err) => console.error(`Connection error for ${assignedId}:`, err));
-        
         onReady(assignedId);
     },
 
     sendData: (type: string, payload: any = {}) => {
-        if (conn1 && conn1.open) {
-            conn1.send({ type, payload });
-        }
+        if (conn1 && conn1.open) conn1.send({ type, payload });
     },
 
     handleNetworkMessage: (data: NetworkMessage, sourceId: PlayerId) => {
-        if (gameActionDispatcher) {
-             gameActionDispatcher(data, sourceId);
-        }
+        if (gameActionDispatcher) gameActionDispatcher(data, sourceId);
     },
 
     disconnectMultiplayer: () => {
@@ -223,22 +204,6 @@ const networkManager = {
         if (peer) { peer.destroy(); peer = null; }
     }
 };
-
-const MAP = [
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-    [1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1],
-    [1,0,2,2,0,0,1,0,2,2,2,2,0,2,0,1],
-    [1,0,2,0,0,0,0,0,0,0,0,2,0,2,0,1],
-    [1,0,2,0,1,1,1,1,0,1,0,2,0,2,0,1],
-    [1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,1],
-    [1,1,1,1,1,0,0,1,0,1,1,1,1,2,0,1],
-    [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1],
-    [1,0,2,0,1,1,1,1,1,1,1,1,1,2,2,1],
-    [1,0,2,0,0,0,0,0,0,0,0,0,0,0,0,1],
-    [1,0,2,2,2,2,0,2,2,2,2,2,2,2,0,1],
-    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-];
 
 // --- Host View Component ---
 const HostView: React.FC = () => {
@@ -284,11 +249,7 @@ const HostView: React.FC = () => {
 
         gameActionDispatcher = (msg: NetworkMessage, pId?: PlayerId) => {
             if (!pId) return;
-            // If conn1 connected, we assign to p1. If conn2 connected, we assign to p2.
-            // For simplicity in single client connection or dual, map source
-            const targetPId: PlayerId = (conn2 && conn2.peer === conn1?.peer) ? 'p1' : 'p1'; // fallback
-            // Let's support dynamic assignment or default to p1/p2
-            const actualPId = pId; 
+            const actualPId = pId;
             const i = inputs.current[actualPId];
             if (!i) return;
 
@@ -298,7 +259,7 @@ const HostView: React.FC = () => {
                 case 'rot_left': i.rot = msg.payload.active ? 1 : 0; break;
                 case 'rot_right': i.rot = msg.payload.active ? -1 : 0; break;
                 case 'strafe_left': i.strafe = msg.payload.active ? -1 : 0; break;
-                case 'strafe_right': i.strafe = msg.payload.active ? -1 : 0; break;
+                case 'strafe_right': i.strafe = msg.payload.active ? 1 : 0; break;
                 case 'shoot': i.shoot = msg.payload.active; break;
                 case 'emote': 
                     engine.current.players[actualPId].emote = msg.payload.emote;
@@ -325,6 +286,7 @@ const HostView: React.FC = () => {
 
         let lastTime = performance.now();
         let animationFrameId: number;
+        let syncTimer = 0;
 
         const rand = (min: number, max: number) => Math.random() * (max - min) + min;
 
@@ -334,7 +296,6 @@ const HostView: React.FC = () => {
             const moveSpeed = 4.5 * dt;
             const rotSpeed = 3.2 * dt;
 
-            // Update players
             (['p1', 'p2'] as PlayerId[]).forEach(pId => {
                 const p = state.players[pId];
                 if (!p.connected) return;
@@ -360,7 +321,6 @@ const HostView: React.FC = () => {
                 if (MAP[Math.floor(p.pos.y)][Math.floor(newX)] === 0) p.pos.x = newX;
                 if (MAP[Math.floor(newY)][Math.floor(p.pos.x)] === 0) p.pos.y = newY;
 
-                // Shooting & Blood splatter / Voxel coins drop
                 if (i.shoot && !p.isShooting) {
                     p.isShooting = true;
                     let hit = false;
@@ -379,13 +339,12 @@ const HostView: React.FC = () => {
                                     e.timer = 0.3;
                                     hit = true;
 
-                                    // Blood particles and stickers test
                                     for (let k = 0; k < 18; k++) {
                                         state.particles.push({
                                             pos: { x: e.pos.x, y: e.pos.y },
                                             vel: { x: rand(-4, 4), y: rand(-4, 4) },
                                             life: 1.2, maxLife: 1.2,
-                                            color: Math.random() > 0.3 ? '#ef4444' : '#991b1b', // Blood red
+                                            color: Math.random() > 0.3 ? '#ef4444' : '#991b1b',
                                             size: rand(3, 7)
                                         });
                                     }
@@ -393,7 +352,6 @@ const HostView: React.FC = () => {
                                     if (e.health <= 0) {
                                         e.state = 'dead';
                                         p.score += 250;
-                                        // Voxel gold drops into bag
                                         for (let g = 0; g < 5; g++) {
                                             state.bagBlocks.push({
                                                 id: Math.random().toString(),
@@ -435,7 +393,7 @@ const HostView: React.FC = () => {
                 }
             });
 
-            // Update Bag Voxel physics (gravity, bouncing, stacking)
+            // Bag physics
             const gravity = 900;
             const bagMaxW = 400;
             const bagFloorH = 280;
@@ -447,22 +405,33 @@ const HostView: React.FC = () => {
 
                 if (b.pos.y > bagFloorH - 15) {
                     b.pos.y = bagFloorH - 15;
-                    b.vel.y *= -0.3; // damped bounce
-                    b.vel.x *= 0.7;  // friction
+                    b.vel.y *= -0.3;
+                    b.vel.x *= 0.7;
                     b.angularVel *= 0.5;
                 }
                 if (b.pos.x < 15) { b.pos.x = 15; b.vel.x *= -0.5; }
                 if (b.pos.x > bagMaxW - 15) { b.pos.x = bagMaxW - 15; b.vel.x *= -0.5; }
             });
 
-            // Particles physics
             state.particles.forEach(pt => {
                 pt.pos.x += pt.vel.x * dt;
                 pt.pos.y += pt.vel.y * dt;
-                pt.vel.y += 200 * dt; // gravity on blood
+                pt.vel.y += 200 * dt;
                 pt.life -= dt;
             });
             state.particles = state.particles.filter(pt => pt.life > 0);
+
+            // Broadcast state sync to connected clients
+            syncTimer += dt;
+            if (syncTimer > 0.04) { // ~25fps sync
+                syncTimer = 0;
+                if (conn1 && conn1.open) {
+                    conn1.send({ type: 'state_sync', payload: { state, assignedId: 'p1' } });
+                }
+                if (conn2 && conn2.open) {
+                    conn2.send({ type: 'state_sync', payload: { state, assignedId: 'p2' } });
+                }
+            }
         };
 
         const renderPOV = (pId: PlayerId, xOffset: number, width: number, height: number) => {
@@ -476,7 +445,6 @@ const HostView: React.FC = () => {
                 return;
             }
 
-            // Ceiling and Floor
             ctx.fillStyle = '#1f2937';
             ctx.fillRect(xOffset, 0, width, height / 2);
             ctx.fillStyle = '#111827';
@@ -484,7 +452,6 @@ const HostView: React.FC = () => {
 
             const zBuffer: number[] = new Array(width).fill(0);
 
-            // Raycasting Walls (Favela style textures)
             for (let x = 0; x < width; x++) {
                 const cameraX = 2 * x / width - 1;
                 const rayDirX = p.dir.x + p.plane.x * cameraX;
@@ -520,13 +487,12 @@ const HostView: React.FC = () => {
                 const drawStart = -lineHeight / 2 + height / 2;
 
                 let color = hit === 1 ? '#374151' : '#4b5563';
-                if (side === 1) color = '#1f2937'; // shading
+                if (side === 1) color = '#1f2937';
 
                 ctx.fillStyle = color;
                 ctx.fillRect(xOffset + x, Math.max(0, drawStart), 1, Math.min(height, lineHeight));
             }
 
-            // Sprites (Enemies & Other Player)
             const sprites: { x: number, y: number, dist: number, type: 'enemy'|'player', state: string, id: string, typeIdx: number }[] = [];
 
             engine.current.enemies.forEach(e => {
@@ -570,10 +536,8 @@ const HostView: React.FC = () => {
                         if (transformY < zBuffer[stripe]) {
                             const sx = xOffset + stripe;
                             const sy = Math.max(0, drawStartY);
-                            
-                            // Procedural pixel-art rendering for enemies / players
                             if (sprite.type === 'enemy') {
-                                ctx.fillStyle = sprite.state === 'pain' ? '#ef4444' : (sprite.typeIdx === 0 ? '#6b7280' : sprite.typeIdx === 1 ? '#4b5563' : '#374151');
+                                ctx.fillStyle = sprite.state === 'pain' ? '#ef4444' : '#6b7280';
                             } else {
                                 ctx.fillStyle = sprite.id === 'p1' ? '#3b82f6' : '#10b981';
                             }
@@ -583,7 +547,6 @@ const HostView: React.FC = () => {
                 }
             });
 
-            // HUD
             ctx.fillStyle = 'rgba(0,0,0,0.6)';
             ctx.fillRect(xOffset + 10, 10, 180, 60);
             ctx.fillStyle = '#22c55e';
@@ -598,9 +561,8 @@ const HostView: React.FC = () => {
                 ctx.fillText(`"${p.emote}"`, xOffset + width / 2 - 40, 80);
             }
 
-            // Gun sprite overlay
             if (p.isShooting) {
-                ctx.fillStyle = '#f59e0b'; // muzzle flash
+                ctx.fillStyle = '#f59e0b';
                 ctx.fillRect(xOffset + width / 2 - 25, height - 90, 50, 50);
             }
             ctx.fillStyle = '#374151';
@@ -621,7 +583,6 @@ const HostView: React.FC = () => {
                 }
             }
 
-            // Players on map
             (['p1', 'p2'] as PlayerId[]).forEach(pId => {
                 const p = engine.current.players[pId];
                 if (p.connected) {
@@ -641,12 +602,10 @@ const HostView: React.FC = () => {
             ctx.font = 'bold 16px monospace';
             ctx.fillText('FAVELA LOOT BAG (COLLECTED GOLD)', xOffset + 15, yOffset + 25);
 
-            // Draw bag outline
             ctx.strokeStyle = '#92400e';
             ctx.lineWidth = 4;
             ctx.strokeRect(xOffset + 15, yOffset + 40, width - 30, height - 55);
 
-            // Render voxel coins/treasures inside bag
             engine.current.bagBlocks.forEach(b => {
                 ctx.save();
                 ctx.translate(xOffset + b.pos.x, yOffset + b.pos.y);
@@ -658,7 +617,6 @@ const HostView: React.FC = () => {
                 ctx.restore();
             });
 
-            // Render blood splatter / particle effects
             engine.current.particles.forEach(pt => {
                 ctx.fillStyle = pt.color;
                 ctx.fillRect(xOffset + pt.pos.x * 25, yOffset + 100 + pt.pos.y * 10, pt.size, pt.size);
@@ -682,7 +640,6 @@ const HostView: React.FC = () => {
             ctx.fillStyle = '#111827';
             ctx.fillRect(halfW - 2, 0, 4, viewH);
 
-            // Bottom panel
             ctx.fillStyle = '#030712';
             ctx.fillRect(0, viewH, canvas.width, canvas.height - viewH);
 
@@ -693,7 +650,6 @@ const HostView: React.FC = () => {
         };
 
         animationFrameId = requestAnimationFrame(loop);
-
         return () => cancelAnimationFrame(animationFrameId);
     }, []);
 
@@ -726,11 +682,13 @@ const HostView: React.FC = () => {
     );
 };
 
-// --- Cast View Component (Controller) ---
+// --- Cast View Component (Controller + Player POV) ---
 const CastView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const [pin, setPin] = useState('');
     const [status, setStatus] = useState<'idle'|'connecting'|'connected'>('idle');
-    const [score, setScore] = useState(0);
+    const [assignedPlayer, setAssignedPlayer] = useState<PlayerId>('p1');
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const latestState = useRef<GameState | null>(null);
 
     const handleConnect = () => {
         if (pin.length !== 4) return;
@@ -740,12 +698,160 @@ const CastView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             () => {
                 setStatus('connected');
                 gameActionDispatcher = (msg) => {
-                    if (msg.type === 'score_update') setScore(msg.payload.score);
+                    if (msg.type === 'assign_player') {
+                        setAssignedPlayer(msg.payload.playerId);
+                    } else if (msg.type === 'state_sync') {
+                        latestState.current = msg.payload.state;
+                        setAssignedPlayer(msg.payload.assignedId);
+                    }
                 };
             },
             () => setStatus('idle')
         );
     };
+
+    // Render individual player POV on Cast mobile screen
+    useEffect(() => {
+        if (status !== 'connected') return;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        let animId: number;
+
+        const renderLoop = () => {
+            const state = latestState.current;
+            const width = canvas.width;
+            const height = canvas.height;
+
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, width, height);
+
+            if (!state) {
+                ctx.fillStyle = '#22c55e';
+                ctx.font = 'bold 16px monospace';
+                ctx.fillText('CONNECTING TO FAVELA SIMULATION...', 20, height / 2);
+                animId = requestAnimationFrame(renderLoop);
+                return;
+            }
+
+            const p = state.players[assignedPlayer];
+            if (!p) {
+                animId = requestAnimationFrame(renderLoop);
+                return;
+            }
+
+            // Draw ceiling & floor
+            ctx.fillStyle = '#1f2937';
+            ctx.fillRect(0, 0, width, height / 2);
+            ctx.fillStyle = '#111827';
+            ctx.fillRect(0, height / 2, width, height / 2);
+
+            const zBuffer: number[] = new Array(width).fill(0);
+
+            // Raycaster walls
+            for (let x = 0; x < width; x++) {
+                const cameraX = 2 * x / width - 1;
+                const rayDirX = p.dir.x + p.plane.x * cameraX;
+                const rayDirY = p.dir.y + p.plane.y * cameraX;
+
+                let mapX = Math.floor(p.pos.x);
+                let mapY = Math.floor(p.pos.y);
+                let sideDistX, sideDistY;
+                const deltaDistX = Math.abs(1 / rayDirX);
+                const deltaDistY = Math.abs(1 / rayDirY);
+                let perpWallDist;
+                let stepX, stepY;
+                let hit = 0;
+                let side = 0;
+
+                if (rayDirX < 0) { stepX = -1; sideDistX = (p.pos.x - mapX) * deltaDistX; }
+                else { stepX = 1; sideDistX = (mapX + 1.0 - p.pos.x) * deltaDistX; }
+                if (rayDirY < 0) { stepY = -1; sideDistY = (p.pos.y - mapY) * deltaDistY; }
+                else { stepY = 1; sideDistY = (mapY + 1.0 - p.pos.y) * deltaDistY; }
+
+                while (hit === 0) {
+                    if (sideDistX < sideDistY) { sideDistX += deltaDistX; mapX += stepX; side = 0; }
+                    else { sideDistY += deltaDistY; mapY += stepY; side = 1; }
+                    if (MAP[mapY] && MAP[mapY][mapX] > 0) hit = MAP[mapY][mapX];
+                }
+
+                if (side === 0) perpWallDist = (mapX - p.pos.x + (1 - stepX) / 2) / rayDirX;
+                else perpWallDist = (mapY - p.pos.y + (1 - stepY) / 2) / rayDirY;
+
+                zBuffer[x] = perpWallDist;
+
+                const lineHeight = Math.floor(height / (perpWallDist || 0.0001));
+                const drawStart = -lineHeight / 2 + height / 2;
+
+                let color = hit === 1 ? '#374151' : '#4b5563';
+                if (side === 1) color = '#1f2937';
+
+                ctx.fillStyle = color;
+                ctx.fillRect(x, Math.max(0, drawStart), 1, Math.min(height, lineHeight));
+            }
+
+            // Enemies / other player sprites
+            const sprites: { x: number, y: number, dist: number, type: 'enemy'|'player', state: string }[] = [];
+            state.enemies.forEach(e => {
+                if (e.health > 0) {
+                    sprites.push({
+                        x: e.pos.x, y: e.pos.y,
+                        dist: Math.pow(p.pos.x - e.pos.x, 2) + Math.pow(p.pos.y - e.pos.y, 2),
+                        type: 'enemy', state: e.state
+                    });
+                }
+            });
+
+            sprites.sort((a, b) => b.dist - a.dist);
+
+            sprites.forEach(sprite => {
+                const spriteX = sprite.x - p.pos.x;
+                const spriteY = sprite.y - p.pos.y;
+
+                const invDet = 1.0 / (p.plane.x * p.dir.y - p.dir.x * p.plane.y);
+                const transformX = invDet * (p.dir.y * spriteX - p.dir.x * spriteY);
+                const transformY = invDet * (-p.plane.y * spriteX + p.plane.x * spriteY);
+
+                if (transformY > 0) {
+                    const spriteScreenX = Math.floor((width / 2) * (1 + transformX / transformY));
+                    const spriteHeight = Math.abs(Math.floor(height / transformY));
+                    const spriteWidth = spriteHeight;
+                    const drawStartY = -spriteHeight / 2 + height / 2;
+                    const drawStartX = -spriteWidth / 2 + spriteScreenX;
+
+                    for (let stripe = Math.max(0, drawStartX); stripe < Math.min(width, drawStartX + spriteWidth); stripe++) {
+                        if (transformY < zBuffer[stripe]) {
+                            ctx.fillStyle = sprite.state === 'pain' ? '#ef4444' : '#6b7280';
+                            ctx.fillRect(stripe, Math.max(0, drawStartY), 1, Math.min(height, spriteHeight));
+                        }
+                    }
+                }
+            });
+
+            // HUD on Cast viewport
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(10, 10, 160, 50);
+            ctx.fillStyle = '#22c55e';
+            ctx.font = 'bold 13px monospace';
+            ctx.fillText(`ROLE: ${assignedPlayer.toUpperCase()}`, 18, 28);
+            ctx.fillStyle = '#ef4444';
+            ctx.fillText(`HP: ${p.health}% | SCORE: ${p.score}`, 18, 48);
+
+            if (p.isShooting) {
+                ctx.fillStyle = '#f59e0b';
+                ctx.fillRect(width / 2 - 20, height - 70, 40, 40);
+            }
+            ctx.fillStyle = '#374151';
+            ctx.fillRect(width / 2 - 12, height - 45, 24, 45);
+
+            animId = requestAnimationFrame(renderLoop);
+        };
+
+        animId = requestAnimationFrame(renderLoop);
+        return () => cancelAnimationFrame(animId);
+    }, [status, assignedPlayer]);
 
     const sendAction = (type: string, active: boolean) => (e: React.SyntheticEvent) => {
         e.preventDefault();
@@ -784,65 +890,70 @@ const CastView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     }
 
     return (
-        <div className="flex flex-col justify-between min-h-screen bg-gray-950 text-white p-4 font-mono select-none touch-none">
-            <div className="flex justify-between items-center bg-gray-900 p-4 rounded-xl border border-gray-800">
-                <div>
-                    <span className="text-xs text-gray-400 block">CONTROLLER STATUS</span>
-                    <span className="text-green-400 font-bold">CONNECTED TO HOST</span>
-                </div>
-                <div className="text-right">
-                    <span className="text-xs text-gray-400 block">SCORE</span>
-                    <span className="text-yellow-400 font-bold text-lg">{score}</span>
+        <div className="flex flex-col justify-between h-screen bg-gray-950 text-white font-mono select-none touch-none overflow-hidden p-2">
+            {/* Player's personal POV screen on mobile */}
+            <div className="relative w-full h-56 bg-black rounded-xl overflow-hidden border-2 border-purple-800 shadow-xl flex-shrink-0">
+                <canvas 
+                    ref={canvasRef} 
+                    width={400} 
+                    height={220} 
+                    className="w-full h-full object-cover"
+                    style={{ imageRendering: 'pixelated' }}
+                />
+                <div className="absolute top-2 right-2 bg-black/80 px-2 py-1 rounded text-xs font-bold text-yellow-400">
+                    {assignedPlayer.toUpperCase()} POV
                 </div>
             </div>
 
             {/* Quick Emotes */}
-            <div className="flex justify-center gap-2 my-2">
+            <div className="flex justify-center gap-1.5 my-1">
                 {['MANDOU BEM!', 'SALVE!', 'FAVELA VENCEU!', 'CORRE!'].map(em => (
                     <button 
                         key={em} 
                         onClick={() => sendEmote(em)}
-                        className="bg-gray-800 hover:bg-gray-700 text-xs px-3 py-2 rounded-lg border border-gray-700 active:scale-95 transition-transform"
+                        className="bg-purple-900/60 hover:bg-purple-800 text-[10px] px-2.5 py-1.5 rounded-lg border border-purple-700 active:scale-95 transition-transform font-bold"
                     >
                         {em}
                     </button>
                 ))}
             </div>
 
-            {/* Main Controller Layout */}
-            <div className="flex justify-between items-end pb-8 px-2">
-                {/* D-Pad */}
-                <div className="relative w-48 h-48 bg-gray-900 rounded-full border-4 border-gray-800 shadow-2xl">
+            {/* Redesigned Arcade Gamepad Controller */}
+            <div className="flex justify-between items-center px-4 pb-4 mt-auto">
+                {/* Advanced D-Pad / Movement */}
+                <div className="relative w-44 h-44 bg-gray-900 rounded-full border-4 border-gray-800 shadow-2xl flex-shrink-0">
                     <button 
-                        className="absolute top-2 left-1/2 -translate-x-1/2 w-14 h-16 bg-gray-800 rounded-lg active:bg-gray-600 flex items-center justify-center text-xl font-bold"
+                        className="absolute top-1 left-1/2 -translate-x-1/2 w-14 h-16 bg-gray-800 rounded-lg active:bg-purple-600 flex items-center justify-center text-xl font-bold shadow"
                         onPointerDown={sendAction('move_fwd', true)} onPointerUp={sendAction('move_fwd', false)} onPointerOut={sendAction('move_fwd', false)}
                     >▲</button>
                     <button 
-                        className="absolute bottom-2 left-1/2 -translate-x-1/2 w-14 h-16 bg-gray-800 rounded-lg active:bg-gray-600 flex items-center justify-center text-xl font-bold"
+                        className="absolute bottom-1 left-1/2 -translate-x-1/2 w-14 h-16 bg-gray-800 rounded-lg active:bg-purple-600 flex items-center justify-center text-xl font-bold shadow"
                         onPointerDown={sendAction('move_bwd', true)} onPointerUp={sendAction('move_bwd', false)} onPointerOut={sendAction('move_bwd', false)}
                     >▼</button>
                     <button 
-                        className="absolute left-2 top-1/2 -translate-y-1/2 w-16 h-14 bg-gray-800 rounded-lg active:bg-gray-600 flex items-center justify-center text-xl font-bold"
+                        className="absolute left-1 top-1/2 -translate-y-1/2 w-16 h-14 bg-gray-800 rounded-lg active:bg-purple-600 flex items-center justify-center text-xl font-bold shadow"
                         onPointerDown={sendAction('rot_left', true)} onPointerUp={sendAction('rot_left', false)} onPointerOut={sendAction('rot_left', false)}
                     >◀</button>
                     <button 
-                        className="absolute right-2 top-1/2 -translate-y-1/2 w-16 h-14 bg-gray-800 rounded-lg active:bg-gray-600 flex items-center justify-center text-xl font-bold"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 w-16 h-14 bg-gray-800 rounded-lg active:bg-purple-600 flex items-center justify-center text-xl font-bold shadow"
                         onPointerDown={sendAction('rot_right', true)} onPointerUp={sendAction('rot_right', false)} onPointerOut={sendAction('rot_right', false)}
                     >▶</button>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex items-center gap-4">
+                {/* Strafe & Action Fire */}
+                <div className="flex items-center gap-3">
                     <button 
-                        className="w-20 h-20 bg-blue-600 rounded-full active:bg-blue-500 shadow-lg active:translate-y-1 flex items-center justify-center text-2xl"
+                        className="w-16 h-16 bg-blue-700 rounded-2xl active:bg-blue-500 shadow-lg active:translate-y-1 flex items-center justify-center text-xl font-bold"
                         onPointerDown={sendAction('strafe_left', true)} onPointerUp={sendAction('strafe_left', false)}
                     >↺</button>
+                    
                     <button 
-                        className="w-28 h-28 bg-red-600 rounded-full active:bg-red-500 shadow-xl active:translate-y-1 flex items-center justify-center font-black text-2xl tracking-wider border-4 border-red-800"
+                        className="w-28 h-28 bg-gradient-to-t from-red-700 to-red-500 rounded-full active:from-red-600 active:to-red-400 shadow-[0_8px_0_#991b1b] active:shadow-none active:translate-y-2 transition-all flex items-center justify-center font-black text-2xl tracking-wider border-4 border-red-900"
                         onPointerDown={sendAction('shoot', true)} onPointerUp={sendAction('shoot', false)}
                     >FIRE</button>
+
                     <button 
-                        className="w-20 h-20 bg-blue-600 rounded-full active:bg-blue-500 shadow-lg active:translate-y-1 flex items-center justify-center text-2xl"
+                        className="w-16 h-16 bg-blue-700 rounded-2xl active:bg-blue-500 shadow-lg active:translate-y-1 flex items-center justify-center text-xl font-bold"
                         onPointerDown={sendAction('strafe_right', true)} onPointerUp={sendAction('strafe_right', false)}
                     >↻</button>
                 </div>
