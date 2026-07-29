@@ -1,153 +1,106 @@
 import Peer, { DataConnection } from 'peerjs';
 
-// Strict networking rules global variables
-export let peer: Peer | null = null;
-export let conn: DataConnection | null = null; // Used by Cast
+export class NetworkManager {
+  peer: Peer | null = null;
+  conn: DataConnection | null = null;
+  
+  onDataCallback: (data: any, peerId?: string) => void = () => {};
+  onConnectCallback: (peerId: string) => void = () => {};
+  onDisconnectCallback: (peerId: string) => void = () => {};
 
-// Host specific variables for multiple players
-export let peer2: Peer | null = null; // For the second pin
-export let hostConns: { id: number; conn: DataConnection }[] = [];
-
-export const generateRandomId = () => {
+  generateRandomId(): string {
     return Math.floor(1000 + Math.random() * 9000).toString();
-};
+  }
 
-export const createHost = (
-    onOpen: (pin1: string, pin2: string) => void,
-    onData: (playerId: number, data: any) => void,
-    onConn: (playerId: number) => void,
-    onClose: (playerId: number) => void
-) => {
-    const pin1 = generateRandomId();
-    const pin2 = generateRandomId();
-
-    peer = new Peer(pin1);
-    peer2 = new Peer(pin2);
-
-    let p1Open = false;
-    let p2Open = false;
-
-    const checkOpen = () => {
-        if (p1Open && p2Open) onOpen(pin1, pin2);
-    };
-
-    peer.on('open', () => { p1Open = true; checkOpen(); });
-    peer2.on('open', () => { p2Open = true; checkOpen(); });
-
-    peer.on('connection', (c) => setupHostConnection(c, 1, onData, onConn, onClose));
-    peer2.on('connection', (c) => setupHostConnection(c, 2, onData, onConn, onClose));
-};
-
-const setupHostConnection = (
-    c: DataConnection,
-    playerId: number,
-    onData: (playerId: number, data: any) => void,
-    onConn: (playerId: number) => void,
-    onClose: (playerId: number) => void
-) => {
-    c.on('open', () => {
-        hostConns.push({ id: playerId, conn: c });
-        onConn(playerId);
+  // Create a client peer
+  createClient() {
+    const clientId = this.generateRandomId() + '-cast';
+    this.peer = new Peer(clientId);
+    this.peer.on('error', (err) => {
+      console.error('Client Peer error:', err);
     });
-    c.on('data', (data) => {
-        handleNetworkMessage(playerId, data, onData);
-    });
-    c.on('close', () => {
-        hostConns = hostConns.filter(hc => hc.id !== playerId);
-        onClose(playerId);
-    });
-    c.on('error', (err) => {
-        console.error('Host connection error:', err);
-    });
-};
+  }
 
-export const createClient = (onOpen: () => void) => {
-    peer = new Peer(generateRandomId());
-    peer.on('open', () => {
-        onOpen();
+  // Connect client to host
+  connectToHost(hostId: string) {
+    if (!this.peer) return;
+    this.conn = this.peer.connect(hostId);
+    this.conn.on('open', () => {
+      this.setupConnection();
+      this.onConnectCallback(hostId);
     });
-    peer.on('error', (err) => {
-        console.error('Client peer error:', err);
+    this.conn.on('error', (err) => {
+      console.error('Connection error:', err);
     });
-};
+    this.conn.on('close', () => {
+      this.onDisconnectCallback(hostId);
+    });
+  }
 
-export const connectToHost = (
-    hostId: string,
-    onData: (data: any) => void,
-    onConnected: () => void,
-    onClose: () => void
-) => {
-    if (!peer) return;
-    conn = peer.connect(hostId);
-    setupConnection(onData, onConnected, onClose);
-};
+  // Host setup
+  createHost(hostId: string) {
+    this.peer = new Peer(hostId);
+    this.peer.on('open', (id) => {
+      console.log('Host created with ID:', id);
+    });
+    this.peer.on('connection', (connection) => {
+      // In a real scenario we'd handle multiple connections, 
+      // but if we are making two separate Host managers (one for each PIN),
+      // we can just save it to `conn`.
+      this.conn = connection;
+      this.setupConnection();
+      this.onConnectCallback(connection.peer);
+    });
+    this.peer.on('error', (err) => {
+      console.error('Host Peer error:', err);
+    });
+    this.peer.on('disconnected', () => {
+      console.log('Host disconnected');
+    });
+  }
 
-export const setupConnection = (
-    onData: (data: any) => void, 
-    onConnected: () => void,
-    onClose: () => void
-) => {
-    if (!conn) return;
-    conn.on('open', () => {
-        onConnected();
+  setupConnection() {
+    if (!this.conn) return;
+    this.conn.on('data', (data) => {
+      this.handleNetworkMessage(data);
     });
-    conn.on('data', (data) => {
-        handleCastNetworkMessage(data, onData);
+    this.conn.on('close', () => {
+      if (this.conn) {
+        this.onDisconnectCallback(this.conn.peer);
+      }
     });
-    conn.on('close', () => {
-        conn = null;
-        onClose();
+    this.conn.on('error', (err) => {
+      console.error('Conn error', err);
     });
-    conn.on('error', (err) => {
-        console.error('Cast connection error:', err);
-    });
-};
+  }
 
-export const sendData = (type: string, payload: any = {}) => {
-    if (conn && conn.open) {
-        conn.send({ type, payload });
+  handleNetworkMessage(data: any) {
+    // A central switch statement that routes incoming data based on data.type.
+    switch (data.type) {
+      case 'move':
+      case 'action':
+      case 'change_ant':
+        this.onDataCallback(data, this.conn?.peer);
+        break;
+      default:
+        console.warn('Unknown network message type:', data.type);
     }
-};
+  }
 
-export const hostBroadcast = (type: string, payload: any = {}) => {
-    hostConns.forEach(c => {
-        if (c.conn.open) c.conn.send({ type, payload });
-    });
-};
+  sendData(type: string, payload: any = {}) {
+    if (this.conn && this.conn.open) {
+      this.conn.send({ type, payload });
+    }
+  }
 
-export const hostSendToPlayer = (playerId: number, type: string, payload: any = {}) => {
-    const c = hostConns.find(hc => hc.id === playerId);
-    if (c && c.conn.open) {
-        c.conn.send({ type, payload });
+  disconnectMultiplayer() {
+    if (this.conn) {
+      this.conn.close();
+      this.conn = null;
     }
-};
-
-const handleNetworkMessage = (playerId: number, data: any, callback: (playerId: number, data: any) => void) => {
-    // Separation of concerns: route incoming data
-    if (data && typeof data === 'object' && data.type) {
-        callback(playerId, data);
+    if (this.peer) {
+      this.peer.destroy();
+      this.peer = null;
     }
-};
-
-const handleCastNetworkMessage = (data: any, callback: (data: any) => void) => {
-    if (data && typeof data === 'object' && data.type) {
-        callback(data);
-    }
-};
-
-export const disconnectMultiplayer = () => {
-    if (conn) {
-        conn.close();
-        conn = null;
-    }
-    hostConns.forEach(c => c.conn.close());
-    hostConns = [];
-    if (peer) {
-        peer.destroy();
-        peer = null;
-    }
-    if (peer2) {
-        peer2.destroy();
-        peer2 = null;
-    }
-};
+  }
+}
