@@ -219,8 +219,8 @@ const HostView: React.FC = () => {
 
     const engine = useRef<GameState>({
         players: {
-            p1: { pos: { x: 2.5, y: 2.5 }, dir: { x: -1, y: 0 }, plane: { x: 0, y: 0.66 }, health: 100, score: 0, isShooting: false, connected: false, emote: null },
-            p2: { pos: { x: 3.5, y: 2.5 }, dir: { x: -1, y: 0 }, plane: { x: 0, y: 0.66 }, health: 100, score: 0, isShooting: false, connected: false, emote: null },
+            p1: { pos: { x: 1.5, y: 1.5 }, dir: { x: -1, y: 0 }, plane: { x: 0, y: 0.66 }, health: 100, score: 0, isShooting: false, connected: false, emote: null },
+            p2: { pos: { x: 2.5, y: 1.5 }, dir: { x: -1, y: 0 }, plane: { x: 0, y: 0.66 }, health: 100, score: 0, isShooting: false, connected: false, emote: null },
         },
         enemies: [
             { id: 'e1', type: 0, pos: { x: 7.5, y: 5.5 }, health: 40, maxHealth: 40, state: 'idle', timer: 0, dir: {x:1, y:0} },
@@ -942,18 +942,22 @@ const CastView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                     <button 
                         className="absolute top-1 left-1/2 -translate-x-1/2 w-12 h-14 bg-gray-800 rounded-lg active:bg-purple-600 flex items-center justify-center text-lg font-bold shadow"
                         onPointerDown={sendAction('move_fwd', true)} onPointerUp={sendAction('move_fwd', false)} onPointerOut={sendAction('move_fwd', false)}
+                        onTouchStart={sendAction('move_fwd', true)} onTouchEnd={sendAction('move_fwd', false)} onTouchCancel={sendAction('move_fwd', false)}
                     >▲</button>
                     <button 
                         className="absolute bottom-1 left-1/2 -translate-x-1/2 w-12 h-14 bg-gray-800 rounded-lg active:bg-purple-600 flex items-center justify-center text-lg font-bold shadow"
                         onPointerDown={sendAction('move_bwd', true)} onPointerUp={sendAction('move_bwd', false)} onPointerOut={sendAction('move_bwd', false)}
+                        onTouchStart={sendAction('move_bwd', true)} onTouchEnd={sendAction('move_bwd', false)} onTouchCancel={sendAction('move_bwd', false)}
                     >▼</button>
                     <button 
                         className="absolute left-1 top-1/2 -translate-y-1/2 w-14 h-12 bg-gray-800 rounded-lg active:bg-purple-600 flex items-center justify-center text-lg font-bold shadow"
                         onPointerDown={sendAction('rot_left', true)} onPointerUp={sendAction('rot_left', false)} onPointerOut={sendAction('rot_left', false)}
+                        onTouchStart={sendAction('rot_left', true)} onTouchEnd={sendAction('rot_left', false)} onTouchCancel={sendAction('rot_left', false)}
                     >◀</button>
                     <button 
                         className="absolute right-1 top-1/2 -translate-y-1/2 w-14 h-12 bg-gray-800 rounded-lg active:bg-purple-600 flex items-center justify-center text-lg font-bold shadow"
                         onPointerDown={sendAction('rot_right', true)} onPointerUp={sendAction('rot_right', false)} onPointerOut={sendAction('rot_right', false)}
+                        onTouchStart={sendAction('rot_right', true)} onTouchEnd={sendAction('rot_right', false)} onTouchCancel={sendAction('rot_right', false)}
                     >▶</button>
                 </div>
 
@@ -962,16 +966,19 @@ const CastView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                     <button 
                         className="w-14 h-14 bg-blue-700 rounded-2xl active:bg-blue-500 shadow-lg active:translate-y-1 flex items-center justify-center text-lg font-bold"
                         onPointerDown={sendAction('strafe_left', true)} onPointerUp={sendAction('strafe_left', false)}
+                        onTouchStart={sendAction('strafe_left', true)} onTouchEnd={sendAction('strafe_left', false)}
                     >↺</button>
                     
                     <button 
                         className="w-24 h-24 bg-gradient-to-t from-red-700 to-red-500 rounded-full active:from-red-600 active:to-red-400 shadow-[0_6px_0_#991b1b] active:shadow-none active:translate-y-1.5 transition-all flex items-center justify-center font-black text-xl tracking-wider border-4 border-red-900"
                         onPointerDown={sendAction('shoot', true)} onPointerUp={sendAction('shoot', false)}
+                        onTouchStart={sendAction('shoot', true)} onTouchEnd={sendAction('shoot', false)}
                     >FIRE</button>
 
                     <button 
                         className="w-14 h-14 bg-blue-700 rounded-2xl active:bg-blue-500 shadow-lg active:translate-y-1 flex items-center justify-center text-lg font-bold"
                         onPointerDown={sendAction('strafe_right', true)} onPointerUp={sendAction('strafe_right', false)}
+                        onTouchStart={sendAction('strafe_right', true)} onTouchEnd={sendAction('strafe_right', false)}
                     >↻</button>
                 </div>
             </div>
