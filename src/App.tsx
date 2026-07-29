@@ -50,7 +50,7 @@ const playSambaDoomAudio = () => {
         const ctx = new AudioContext();
         
         let beat = 0;
-        const tempo = 135;
+        const tempo = 138;
         const stepTime = 60 / (tempo * 4);
 
         const playKick = (time: number) => {
@@ -58,9 +58,9 @@ const playSambaDoomAudio = () => {
             const gain = ctx.createGain();
             osc.connect(gain);
             gain.connect(ctx.destination);
-            osc.frequency.setValueAtTime(120, time);
+            osc.frequency.setValueAtTime(130, time);
             osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.3);
-            gain.gain.setValueAtTime(0.8, time);
+            gain.gain.setValueAtTime(0.9, time);
             gain.gain.exponentialRampToValueAtTime(0.01, time + 0.3);
             osc.start(time);
             osc.stop(time + 0.3);
@@ -72,8 +72,8 @@ const playSambaDoomAudio = () => {
             osc.connect(gain);
             gain.connect(ctx.destination);
             osc.type = 'triangle';
-            osc.frequency.setValueAtTime(80, time);
-            osc.frequency.exponentialRampToValueAtTime(35, time + 0.4);
+            osc.frequency.setValueAtTime(90, time);
+            osc.frequency.exponentialRampToValueAtTime(30, time + 0.4);
             gain.gain.setValueAtTime(1.0, time);
             gain.gain.linearRampToValueAtTime(0, time + 0.4);
             osc.start(time);
@@ -87,7 +87,7 @@ const playSambaDoomAudio = () => {
             const curve = new Float32Array(400);
             for (let i = 0; i < 400; ++i) {
                 const x = i * 2 / 400 - 1;
-                curve[i] = (3 + 30) * x * 20 * (Math.PI / 180) / (Math.PI + 30 * Math.abs(x));
+                curve[i] = (3 + 35) * x * 20 * (Math.PI / 180) / (Math.PI + 35 * Math.abs(x));
             }
             distortion.curve = curve;
             distortion.oversample = '4x';
@@ -98,7 +98,7 @@ const playSambaDoomAudio = () => {
 
             osc.type = 'sawtooth';
             osc.frequency.value = note;
-            gain.gain.setValueAtTime(0.25, time);
+            gain.gain.setValueAtTime(0.28, time);
             gain.gain.linearRampToValueAtTime(0, time + 0.2);
             
             osc.start(time);
@@ -113,7 +113,7 @@ const playSambaDoomAudio = () => {
                 if (i % 8 === 0 || i % 8 === 6 || i % 8 === 10) playKick(t);
                 if (i % 8 === 4 || i % 8 === 12) playSurdo(t);
                 if (i % 2 === 0) {
-                    const notes = [55, 55, 65.41, 73.42, 55, 82.41, 73.42, 65.41];
+                    const notes = [55, 65.41, 73.42, 82.41, 55, 73.42, 87.31, 77.78];
                     playDistortedBass(t, notes[(i/2) % notes.length]);
                 }
             }
@@ -176,7 +176,12 @@ const networkManager = {
     connectToHost: (hostId: string, onConnected: () => void, onError: () => void) => {
         if (!peer) return;
         conn1 = peer.connect(hostId);
-        conn1.on('open', () => networkManager.setupConnection(conn1!, 'p1', onConnected));
+        conn1.on('open', () => {
+            conn1!.on('data', (data: any) => {
+                if (gameActionDispatcher) gameActionDispatcher(data, 'p1');
+            });
+            onConnected();
+        });
         conn1.on('error', onError);
     },
 
@@ -218,10 +223,10 @@ const HostView: React.FC = () => {
             p2: { pos: { x: 3.5, y: 2.5 }, dir: { x: -1, y: 0 }, plane: { x: 0, y: 0.66 }, health: 100, score: 0, isShooting: false, connected: false, emote: null },
         },
         enemies: [
-            { id: 'e1', type: 0, pos: { x: 7.5, y: 5.5 }, health: 30, maxHealth: 30, state: 'idle', timer: 0, dir: {x:1, y:0} },
-            { id: 'e2', type: 1, pos: { x: 8.5, y: 8.5 }, health: 50, maxHealth: 50, state: 'idle', timer: 0, dir: {x:0, y:1} },
-            { id: 'e3', type: 2, pos: { x: 2.5, y: 10.5 }, health: 40, maxHealth: 40, state: 'idle', timer: 0, dir: {x:-1, y:0} },
-            { id: 'e4', type: 3, pos: { x: 12.5, y: 2.5 }, health: 60, maxHealth: 60, state: 'idle', timer: 0, dir: {x:0, y:-1} },
+            { id: 'e1', type: 0, pos: { x: 7.5, y: 5.5 }, health: 40, maxHealth: 40, state: 'idle', timer: 0, dir: {x:1, y:0} },
+            { id: 'e2', type: 1, pos: { x: 8.5, y: 8.5 }, health: 60, maxHealth: 60, state: 'idle', timer: 0, dir: {x:0, y:1} },
+            { id: 'e3', type: 2, pos: { x: 2.5, y: 10.5 }, health: 50, maxHealth: 50, state: 'idle', timer: 0, dir: {x:-1, y:0} },
+            { id: 'e4', type: 3, pos: { x: 12.5, y: 2.5 }, health: 80, maxHealth: 80, state: 'idle', timer: 0, dir: {x:0, y:-1} },
         ],
         bagBlocks: [],
         particles: [],
@@ -333,33 +338,34 @@ const HostView: React.FC = () => {
                             if (e.health > 0) {
                                 const dx = e.pos.x - cx;
                                 const dy = e.pos.y - cy;
-                                if (Math.sqrt(dx*dx + dy*dy) < 0.6) {
-                                    e.health -= 15;
+                                if (Math.sqrt(dx*dx + dy*dy) < 0.7) {
+                                    e.health -= 20;
                                     e.state = 'pain';
-                                    e.timer = 0.3;
+                                    e.timer = 0.35;
                                     hit = true;
 
-                                    for (let k = 0; k < 18; k++) {
+                                    // Intense gore & blood splatter / chunks reaction
+                                    for (let k = 0; k < 25; k++) {
                                         state.particles.push({
                                             pos: { x: e.pos.x, y: e.pos.y },
-                                            vel: { x: rand(-4, 4), y: rand(-4, 4) },
-                                            life: 1.2, maxLife: 1.2,
-                                            color: Math.random() > 0.3 ? '#ef4444' : '#991b1b',
-                                            size: rand(3, 7)
+                                            vel: { x: rand(-5, 5), y: rand(-5, 5) },
+                                            life: 1.5, maxLife: 1.5,
+                                            color: Math.random() > 0.2 ? '#ef4444' : '#b91c1c',
+                                            size: rand(4, 9)
                                         });
                                     }
 
                                     if (e.health <= 0) {
                                         e.state = 'dead';
-                                        p.score += 250;
-                                        for (let g = 0; g < 5; g++) {
+                                        p.score += 300;
+                                        for (let g = 0; g < 6; g++) {
                                             state.bagBlocks.push({
                                                 id: Math.random().toString(),
-                                                pos: { x: rand(80, 320), y: -30 - g * 15 },
-                                                vel: { x: rand(-120, 120), y: rand(50, 150) },
+                                                pos: { x: rand(80, 320), y: -40 - g * 15 },
+                                                vel: { x: rand(-140, 140), y: rand(40, 180) },
                                                 color: g % 2 === 0 ? '#fbbf24' : '#f59e0b',
                                                 rotation: rand(0, Math.PI * 2),
-                                                angularVel: rand(-8, 8)
+                                                angularVel: rand(-10, 10)
                                             });
                                         }
                                     }
@@ -373,7 +379,7 @@ const HostView: React.FC = () => {
                 }
             });
 
-            // Update enemies AI
+            // Update enemies
             state.enemies.forEach(e => {
                 if (e.health <= 0) return;
                 if (e.timer > 0) {
@@ -385,8 +391,8 @@ const HostView: React.FC = () => {
                         const mag = Math.sqrt(e.dir.x*e.dir.x + e.dir.y*e.dir.y);
                         if (mag > 0) { e.dir.x /= mag; e.dir.y /= mag; }
                     }
-                    const nx = e.pos.x + e.dir.x * dt * 2.0;
-                    const ny = e.pos.y + e.dir.y * dt * 2.0;
+                    const nx = e.pos.x + e.dir.x * dt * 2.2;
+                    const ny = e.pos.y + e.dir.y * dt * 2.2;
                     if (MAP[Math.floor(ny)] && MAP[Math.floor(ny)][Math.floor(nx)] === 0) {
                         e.pos.x = nx; e.pos.y = ny;
                     }
@@ -416,14 +422,14 @@ const HostView: React.FC = () => {
             state.particles.forEach(pt => {
                 pt.pos.x += pt.vel.x * dt;
                 pt.pos.y += pt.vel.y * dt;
-                pt.vel.y += 200 * dt;
+                pt.vel.y += 250 * dt;
                 pt.life -= dt;
             });
             state.particles = state.particles.filter(pt => pt.life > 0);
 
-            // Broadcast state sync to connected clients
+            // Broadcast state sync
             syncTimer += dt;
-            if (syncTimer > 0.04) { // ~25fps sync
+            if (syncTimer > 0.035) { // ~30fps sync
                 syncTimer = 0;
                 if (conn1 && conn1.open) {
                     conn1.send({ type: 'state_sync', payload: { state, assignedId: 'p1' } });
@@ -493,14 +499,14 @@ const HostView: React.FC = () => {
                 ctx.fillRect(xOffset + x, Math.max(0, drawStart), 1, Math.min(height, lineHeight));
             }
 
-            const sprites: { x: number, y: number, dist: number, type: 'enemy'|'player', state: string, id: string, typeIdx: number }[] = [];
+            const sprites: { x: number, y: number, dist: number, type: 'enemy'|'player', state: string, id: string, health: number, maxHealth: number }[] = [];
 
             engine.current.enemies.forEach(e => {
                 if (e.health > 0) {
                     sprites.push({
                         x: e.pos.x, y: e.pos.y,
                         dist: Math.pow(p.pos.x - e.pos.x, 2) + Math.pow(p.pos.y - e.pos.y, 2),
-                        type: 'enemy', state: e.state, id: e.id, typeIdx: e.type
+                        type: 'enemy', state: e.state, id: e.id, health: e.health, maxHealth: e.maxHealth
                     });
                 }
             });
@@ -511,7 +517,7 @@ const HostView: React.FC = () => {
                 sprites.push({
                     x: op.pos.x, y: op.pos.y,
                     dist: Math.pow(p.pos.x - op.pos.x, 2) + Math.pow(p.pos.y - op.pos.y, 2),
-                    type: 'player', state: 'idle', id: otherP, typeIdx: 0
+                    type: 'player', state: 'idle', id: otherP, health: 100, maxHealth: 100
                 });
             }
 
@@ -536,8 +542,19 @@ const HostView: React.FC = () => {
                         if (transformY < zBuffer[stripe]) {
                             const sx = xOffset + stripe;
                             const sy = Math.max(0, drawStartY);
+                            
                             if (sprite.type === 'enemy') {
-                                ctx.fillStyle = sprite.state === 'pain' ? '#ef4444' : '#6b7280';
+                                // Detailed PM tactical uniform with helmet & visor
+                                const relY = (sy - drawStartY) / spriteHeight;
+                                if (sprite.state === 'pain') {
+                                    ctx.fillStyle = '#ef4444'; // blood flash
+                                } else if (relY < 0.25) {
+                                    ctx.fillStyle = '#1e293b'; // Helmet
+                                } else if (relY < 0.35) {
+                                    ctx.fillStyle = '#94a3b8'; // Visor
+                                } else {
+                                    ctx.fillStyle = '#475569'; // Tactical Gray Uniform
+                                }
                             } else {
                                 ctx.fillStyle = sprite.id === 'p1' ? '#3b82f6' : '#10b981';
                             }
@@ -547,18 +564,19 @@ const HostView: React.FC = () => {
                 }
             });
 
-            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            // HUD
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
             ctx.fillRect(xOffset + 10, 10, 180, 60);
             ctx.fillStyle = '#22c55e';
             ctx.font = 'bold 14px monospace';
-            ctx.fillText(`${pId.toUpperCase()} SCORE: ${p.score}`, xOffset + 20, 32);
+            ctx.fillText(`P${pId==='p1'?'1':'2'} SCORE: ${p.score}`, xOffset + 20, 32);
             ctx.fillStyle = '#ef4444';
             ctx.fillText(`HEALTH: ${p.health}%`, xOffset + 20, 54);
 
             if (p.emote) {
                 ctx.fillStyle = '#facc15';
-                ctx.font = 'bold 24px monospace';
-                ctx.fillText(`"${p.emote}"`, xOffset + width / 2 - 40, 80);
+                ctx.font = 'bold 22px monospace';
+                ctx.fillText(`"${p.emote}"`, xOffset + width / 2 - 50, 80);
             }
 
             if (p.isShooting) {
@@ -702,7 +720,9 @@ const CastView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                         setAssignedPlayer(msg.payload.playerId);
                     } else if (msg.type === 'state_sync') {
                         latestState.current = msg.payload.state;
-                        setAssignedPlayer(msg.payload.assignedId);
+                        if (msg.payload.assignedId && !assignedPlayer) {
+                            setAssignedPlayer(msg.payload.assignedId);
+                        }
                     }
                 };
             },
@@ -710,7 +730,7 @@ const CastView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         );
     };
 
-    // Render individual player POV on Cast mobile screen
+    // Render individual player POV on Cast mobile screen with gore & enemies
     useEffect(() => {
         if (status !== 'connected') return;
         const canvas = canvasRef.current;
@@ -742,7 +762,6 @@ const CastView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 return;
             }
 
-            // Draw ceiling & floor
             ctx.fillStyle = '#1f2937';
             ctx.fillRect(0, 0, width, height / 2);
             ctx.fillStyle = '#111827';
@@ -750,7 +769,6 @@ const CastView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
             const zBuffer: number[] = new Array(width).fill(0);
 
-            // Raycaster walls
             for (let x = 0; x < width; x++) {
                 const cameraX = 2 * x / width - 1;
                 const rayDirX = p.dir.x + p.plane.x * cameraX;
@@ -792,7 +810,6 @@ const CastView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 ctx.fillRect(x, Math.max(0, drawStart), 1, Math.min(height, lineHeight));
             }
 
-            // Enemies / other player sprites
             const sprites: { x: number, y: number, dist: number, type: 'enemy'|'player', state: string }[] = [];
             state.enemies.forEach(e => {
                 if (e.health > 0) {
@@ -823,28 +840,28 @@ const CastView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
                     for (let stripe = Math.max(0, drawStartX); stripe < Math.min(width, drawStartX + spriteWidth); stripe++) {
                         if (transformY < zBuffer[stripe]) {
-                            ctx.fillStyle = sprite.state === 'pain' ? '#ef4444' : '#6b7280';
+                            ctx.fillStyle = sprite.state === 'pain' ? '#ef4444' : '#475569';
                             ctx.fillRect(stripe, Math.max(0, drawStartY), 1, Math.min(height, spriteHeight));
                         }
                     }
                 }
             });
 
-            // HUD on Cast viewport
-            ctx.fillStyle = 'rgba(0,0,0,0.7)';
-            ctx.fillRect(10, 10, 160, 50);
+            // HUD
+            ctx.fillStyle = 'rgba(0,0,0,0.8)';
+            ctx.fillRect(8, 8, 140, 42);
             ctx.fillStyle = '#22c55e';
-            ctx.font = 'bold 13px monospace';
-            ctx.fillText(`ROLE: ${assignedPlayer.toUpperCase()}`, 18, 28);
+            ctx.font = 'bold 11px monospace';
+            ctx.fillText(`ROLE: ${assignedPlayer.toUpperCase()}`, 14, 22);
             ctx.fillStyle = '#ef4444';
-            ctx.fillText(`HP: ${p.health}% | SCORE: ${p.score}`, 18, 48);
+            ctx.fillText(`HP: ${p.health}% | S: ${p.score}`, 14, 38);
 
             if (p.isShooting) {
                 ctx.fillStyle = '#f59e0b';
-                ctx.fillRect(width / 2 - 20, height - 70, 40, 40);
+                ctx.fillRect(width / 2 - 18, height - 60, 36, 36);
             }
             ctx.fillStyle = '#374151';
-            ctx.fillRect(width / 2 - 12, height - 45, 24, 45);
+            ctx.fillRect(width / 2 - 10, height - 35, 20, 35);
 
             animId = requestAnimationFrame(renderLoop);
         };
@@ -890,13 +907,13 @@ const CastView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     }
 
     return (
-        <div className="flex flex-col justify-between h-screen bg-gray-950 text-white font-mono select-none touch-none overflow-hidden p-2">
+        <div className="flex flex-col justify-between h-screen bg-gray-950 text-white font-mono select-none touch-none overflow-hidden p-3">
             {/* Player's personal POV screen on mobile */}
-            <div className="relative w-full h-56 bg-black rounded-xl overflow-hidden border-2 border-purple-800 shadow-xl flex-shrink-0">
+            <div className="relative w-full h-48 bg-black rounded-xl overflow-hidden border-2 border-purple-800 shadow-xl flex-shrink-0">
                 <canvas 
                     ref={canvasRef} 
-                    width={400} 
-                    height={220} 
+                    width={380} 
+                    height={200} 
                     className="w-full h-full object-cover"
                     style={{ imageRendering: 'pixelated' }}
                 />
@@ -906,54 +923,54 @@ const CastView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             </div>
 
             {/* Quick Emotes */}
-            <div className="flex justify-center gap-1.5 my-1">
+            <div className="flex justify-center gap-2 my-2 flex-shrink-0">
                 {['MANDOU BEM!', 'SALVE!', 'FAVELA VENCEU!', 'CORRE!'].map(em => (
                     <button 
                         key={em} 
                         onClick={() => sendEmote(em)}
-                        className="bg-purple-900/60 hover:bg-purple-800 text-[10px] px-2.5 py-1.5 rounded-lg border border-purple-700 active:scale-95 transition-transform font-bold"
+                        className="bg-purple-900/70 hover:bg-purple-800 text-[11px] px-2.5 py-1.5 rounded-lg border border-purple-600 active:scale-95 transition-transform font-bold"
                     >
                         {em}
                     </button>
                 ))}
             </div>
 
-            {/* Redesigned Arcade Gamepad Controller */}
-            <div className="flex justify-between items-center px-4 pb-4 mt-auto">
+            {/* Non-overlapping Arcade Gamepad Controller */}
+            <div className="flex justify-between items-center px-2 pb-2 mt-auto">
                 {/* Advanced D-Pad / Movement */}
-                <div className="relative w-44 h-44 bg-gray-900 rounded-full border-4 border-gray-800 shadow-2xl flex-shrink-0">
+                <div className="relative w-40 h-40 bg-gray-900 rounded-full border-4 border-gray-800 shadow-2xl flex-shrink-0">
                     <button 
-                        className="absolute top-1 left-1/2 -translate-x-1/2 w-14 h-16 bg-gray-800 rounded-lg active:bg-purple-600 flex items-center justify-center text-xl font-bold shadow"
+                        className="absolute top-1 left-1/2 -translate-x-1/2 w-12 h-14 bg-gray-800 rounded-lg active:bg-purple-600 flex items-center justify-center text-lg font-bold shadow"
                         onPointerDown={sendAction('move_fwd', true)} onPointerUp={sendAction('move_fwd', false)} onPointerOut={sendAction('move_fwd', false)}
                     >▲</button>
                     <button 
-                        className="absolute bottom-1 left-1/2 -translate-x-1/2 w-14 h-16 bg-gray-800 rounded-lg active:bg-purple-600 flex items-center justify-center text-xl font-bold shadow"
+                        className="absolute bottom-1 left-1/2 -translate-x-1/2 w-12 h-14 bg-gray-800 rounded-lg active:bg-purple-600 flex items-center justify-center text-lg font-bold shadow"
                         onPointerDown={sendAction('move_bwd', true)} onPointerUp={sendAction('move_bwd', false)} onPointerOut={sendAction('move_bwd', false)}
                     >▼</button>
                     <button 
-                        className="absolute left-1 top-1/2 -translate-y-1/2 w-16 h-14 bg-gray-800 rounded-lg active:bg-purple-600 flex items-center justify-center text-xl font-bold shadow"
+                        className="absolute left-1 top-1/2 -translate-y-1/2 w-14 h-12 bg-gray-800 rounded-lg active:bg-purple-600 flex items-center justify-center text-lg font-bold shadow"
                         onPointerDown={sendAction('rot_left', true)} onPointerUp={sendAction('rot_left', false)} onPointerOut={sendAction('rot_left', false)}
                     >◀</button>
                     <button 
-                        className="absolute right-1 top-1/2 -translate-y-1/2 w-16 h-14 bg-gray-800 rounded-lg active:bg-purple-600 flex items-center justify-center text-xl font-bold shadow"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 w-14 h-12 bg-gray-800 rounded-lg active:bg-purple-600 flex items-center justify-center text-lg font-bold shadow"
                         onPointerDown={sendAction('rot_right', true)} onPointerUp={sendAction('rot_right', false)} onPointerOut={sendAction('rot_right', false)}
                     >▶</button>
                 </div>
 
                 {/* Strafe & Action Fire */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                     <button 
-                        className="w-16 h-16 bg-blue-700 rounded-2xl active:bg-blue-500 shadow-lg active:translate-y-1 flex items-center justify-center text-xl font-bold"
+                        className="w-14 h-14 bg-blue-700 rounded-2xl active:bg-blue-500 shadow-lg active:translate-y-1 flex items-center justify-center text-lg font-bold"
                         onPointerDown={sendAction('strafe_left', true)} onPointerUp={sendAction('strafe_left', false)}
                     >↺</button>
                     
                     <button 
-                        className="w-28 h-28 bg-gradient-to-t from-red-700 to-red-500 rounded-full active:from-red-600 active:to-red-400 shadow-[0_8px_0_#991b1b] active:shadow-none active:translate-y-2 transition-all flex items-center justify-center font-black text-2xl tracking-wider border-4 border-red-900"
+                        className="w-24 h-24 bg-gradient-to-t from-red-700 to-red-500 rounded-full active:from-red-600 active:to-red-400 shadow-[0_6px_0_#991b1b] active:shadow-none active:translate-y-1.5 transition-all flex items-center justify-center font-black text-xl tracking-wider border-4 border-red-900"
                         onPointerDown={sendAction('shoot', true)} onPointerUp={sendAction('shoot', false)}
                     >FIRE</button>
 
                     <button 
-                        className="w-16 h-16 bg-blue-700 rounded-2xl active:bg-blue-500 shadow-lg active:translate-y-1 flex items-center justify-center text-xl font-bold"
+                        className="w-14 h-14 bg-blue-700 rounded-2xl active:bg-blue-500 shadow-lg active:translate-y-1 flex items-center justify-center text-lg font-bold"
                         onPointerDown={sendAction('strafe_right', true)} onPointerUp={sendAction('strafe_right', false)}
                     >↻</button>
                 </div>
