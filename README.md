@@ -1,20 +1,41 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Emoji Capture 🐾
 
-# Run and deploy your AI Studio app
+A modular, lightweight, playful game built with React 18, TypeScript, Tailwind CSS, and Vite. Catch live emojis in diverse biomes, raise them on your cozy farm with autonomous wandering and feeding mechanics, trade with friends in persistent multiplayer rooms, and experience dynamic timed world events!
 
-This contains everything you need to run your app locally.
+---
 
-View your app in AI Studio: https://ai.studio/apps/01f6b420-337f-4fa3-9afb-40372bfecbb1
+## Features
 
-## Run Locally
+- **Modular Architecture**: Clean separation of systems (Audio, Events, Multiplayer, Farm AI, Emojis).
+- **Wild Biomes & Catching**: Explore Forest, Volcano, Crystal, and Sky biomes with interactive capture mechanics.
+- **Dynamic Events**: Starry Meteor Showers and Biome Festivals with boosted rare emoji spawn rates.
+- **Cozy Emoji Farm**: Autonomous emoji wandering, idle animations, feeding meat treats, and happiness reactions.
+- **Multiplayer Trading**: Room codes with BroadcastChannel sync and persistent trade state.
+- **Web Audio Synthesizer**: Built-in sound effects and background music loops with audio toggles.
 
-**Prerequisites:**  Node.js
+---
 
+## Getting Started on GitHub & Local Setup
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+1. **Clone the repository**:
+   ```bash
+   git clone <your-repository-url>
+   cd <repository-folder>
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Run the development server**:
+   ```bash
+   npm run dev
+   ```
+   Open `http://localhost:3000` in your browser.
+
+4. **Build for production (GitHub Pages, Netlify, Vercel)**:
+   ```bash
+   npm run build
+   ```
+   The optimized production bundle will be generated in the `dist/` directory.
