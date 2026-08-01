@@ -1,6 +1,6 @@
 {
-  "name": "Favela Doom Co-op",
-  "description": "A multiplayer DOOM-style dungeon co-op game set in a favela with PeerJS networking, procedural levels, blood particles, voxel loot bag, and AI samba chiptune audio.",
+  "name": "Emoji Capture",
+  "description": "Catch, raise, feed, and trade adorable live emojis in a modular vibrant world with dynamic events, farm life, and multiplayer rooms.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
